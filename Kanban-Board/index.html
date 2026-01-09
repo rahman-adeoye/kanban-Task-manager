@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban Task Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .column-height { min-height: calc(100vh - 250px); }
+    </style>
+</head>
+<body class="bg-[#F4F7FD] dark:bg-[#20212C] text-[#000112] dark:text-white transition-colors duration-300 overflow-hidden">
+
+    <div id="task-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div class="bg-white dark:bg-[#2B2C37] w-full max-w-md rounded-lg p-8 space-y-6 relative">
+            <button onclick="closeModal()" class="absolute top-6 right-6 text-[#828FA3] hover:text-red-500 text-xl">✕</button>
+            <h2 id="modal-title" class="text-xl font-bold pr-8"></h2>
+            <p id="modal-desc" class="text-[#828FA3] text-sm leading-6 font-medium"></p>
+            
+            <div>
+                <p id="subtask-count" class="text-[#828FA3] text-xs font-bold mb-4 uppercase tracking-widest"></p>
+                <div id="subtask-list" class="space-y-2">
+                    </div>
+            </div>
+
+            <div>
+                <label class="text-[#828FA3] text-xs font-bold mb-2 block uppercase">Current Status</label>
+                <select id="modal-status" class="w-full bg-transparent border border-[#828FA340] rounded p-3 text-sm font-bold dark:text-white outline-none focus:border-[#635FC7]">
+                    <option value="Todo">Todo</option>
+                    <option value="Doing">Doing</option>
+                    <option value="Done">Done</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex h-screen">
+        <aside class="w-[300px] bg-white dark:bg-[#2B2C37] border-r border-[#E4EBFA] dark:border-[#3E3F4E] flex flex-col py-8 shrink-0">
+            <div class="px-8 mb-12 flex items-center gap-4">
+                <div class="flex gap-1"><div class="w-1.5 h-6 bg-[#635FC7] rounded-full"></div><div class="w-1.5 h-6 bg-[#635FC7] opacity-75 rounded-full"></div><div class="w-1.5 h-6 bg-[#635FC7] opacity-50 rounded-full"></div></div>
+                <h1 class="text-3xl font-bold">kanban</h1>
+            </div>
+            <nav class="flex-1 pr-6"><button class="w-full flex items-center gap-4 py-4 px-8 bg-[#635FC7] text-white rounded-r-full font-bold">📋 Platform Launch</button></nav>
+            <div class="mx-6 bg-[#F4F7FD] dark:bg-[#20212C] rounded-lg p-4 flex justify-center items-center gap-6">
+                <span>☀️</span><button onclick="document.documentElement.classList.toggle('dark')" class="w-10 h-5 bg-[#635FC7] rounded-full relative p-1"><div class="bg-white w-3 h-3 rounded-full absolute top-1 left-1 dark:left-6 transition-all"></div></button><span>🌙</span>
+            </div>
+        </aside>
+
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header class="h-24 bg-white dark:bg-[#2B2C37] border-b border-[#E4EBFA] dark:border-[#3E3F4E] flex items-center justify-between px-8 shrink-0">
+                <h2 class="text-2xl font-bold">Platform Launch</h2>
+                <button class="bg-[#635FC7] hover:bg-[#A8A4FF] text-white px-6 py-3 rounded-full font-bold transition">+ Add New Task</button>
+            </header>
+
+            <main id="board" class="flex-1 overflow-x-auto p-6 flex gap-6 no-scrollbar bg-[#F4F7FD] dark:bg-[#20212C]">
+                </main>
+        </div>
+    </div>
+
+    <script>
+        // Data structure based on README and Figma
+        const columns = [
+            { id: 'todo', name: 'Todo', color: '#49C4E5', tasks: [
+                { id: 1, title: 'Build UI for onboarding', desc: 'Create a smooth entry for new users.', subtasks: ['Design mockups', 'Build React components', 'Add animations'], status: 'Todo' },
+                { id: 2, title: 'Build UI for search', desc: 'Allow users to search tasks.', subtasks: ['Logic for filter'], status: 'Todo' }
+            ]},
+            { id: 'doing', name: 'Doing', color: '#8471F2', tasks: [
+                { id: 3, title: 'Design settings page', desc: 'Focus on dark mode toggle.', subtasks: ['Layout design', 'Color palette'], status: 'Doing' }
+            ]},
+            { id: 'done', name: 'Done', color: '#67E2AE', tasks: [
+                { id: 4, title: 'Review competitor apps', desc: 'Market research.', subtasks: ['Check Trello', 'Check Asana'], status: 'Done' }
+            ]}
+        ];
+
+        function renderBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = columns.map(col => `
+                <div class="w-[280px] shrink-0">
+                    <h3 class="flex items-center gap-3 text-[#828FA3] font-bold tracking-[2.4px] uppercase text-xs mb-6">
+                        <span class="w-4 h-4 rounded-full" style="background-color: ${col.color}"></span> ${col.name} (${col.tasks.length})
+                    </h3>
+                    <div id="${col.id}-list" class="column-height space-y-5">
+                        ${col.tasks.map(task => `
+                            <div onclick="openTask(${task.id})" class="bg-white dark:bg-[#2B2C37] p-6 rounded-lg shadow-md cursor-pointer group hover:shadow-lg transition">
+                                <h4 class="dark:text-white font-bold group-hover:text-[#635FC7] mb-2">${task.title}</h4>
+                                <p class="text-[#828FA3] text-xs font-bold">${task.subtasks.length} subtasks</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('') + `<div class="w-[280px] shrink-0 pt-10"><div class="h-full bg-gradient-to-b from-[#E9EFFA] to-[#E9EFFA40] dark:from-[#2B2C3720] dark:to-[#2B2C3710] rounded-lg flex items-center justify-center text-[#828FA3] font-bold text-2xl hover:text-[#635FC7] cursor-pointer transition">+ New Column</div></div>`;
+
+            // Re-init Sortable
+            columns.forEach(col => {
+                new Sortable(document.getElementById(`${col.id}-list`), { group: 'kanban', animation: 150 });
+            });
+        }
+
+        function openTask(id) {
+            const task = columns.flatMap(c => c.tasks).find(t => t.id === id);
+            document.getElementById('modal-title').innerText = task.title;
+            document.getElementById('modal-desc').innerText = task.desc;
+            document.getElementById('subtask-count').innerText = `Subtasks (${task.subtasks.length})`;
+            document.getElementById('subtask-list').innerHTML = task.subtasks.map(s => `
+                <div class="flex items-center gap-3 bg-[#F4F7FD] dark:bg-[#20212C] p-3 rounded hover:bg-[#635FC740] cursor-pointer transition">
+                    <input type="checkbox" class="accent-[#635FC7]">
+                    <span class="text-xs font-bold dark:text-white opacity-70">${s}</span>
+                </div>
+            `).join('');
+            document.getElementById('modal-status').value = task.status;
+            document.getElementById('task-modal').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('task-modal').classList.add('hidden'); }
+
+        renderBoard();
+    </script>
+</body>
+</html>
